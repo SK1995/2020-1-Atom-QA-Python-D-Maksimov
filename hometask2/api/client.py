@@ -1,10 +1,10 @@
-import requests
-import json
-
-
-from utils.additional_structures import Segment, Segments
-from utils.exceptions import ResponseStatusCodeException
 from urllib.parse import urljoin
+
+import requests
+from typing import List
+
+from utils.additional_structures import Segment
+from utils.exceptions import ResponseStatusCodeException
 
 
 class ApiClient:
@@ -94,7 +94,7 @@ class ApiClient:
 
         responce = self.make_request('GET', location, headers=headers, json_convert=False)
 
-    def create_new_segment(self, name, segments: Segments):
+    def create_new_segment(self, name):
         headers = {
             'X-CSRFToken': self.csrf_token,
             'Referer': 'https://target.my.com/segments/segments_list/new',
@@ -133,10 +133,12 @@ class ApiClient:
         location = 'api/v2/remarketing/segments.json?fields=relations__object_type,relations__object_id,relations__params,relations_count,id,name,pass_condition,created,campaign_ids,users,flags'
 
         response = self.make_request('POST', location, headers=headers, json=json_data)
+        try:
+            return Segment(id=response['id'], name=response['name'])
+        except Exception:
+            return None
 
-        segments.data.append(Segment(id=response['id'], name=response['name']))
-
-    def delete_segment(self, id, segments: Segments = None):
+    def delete_segment(self, id):
         headers = {
             'X-CSRFToken': self.csrf_token,
             'Referer': 'https://target.my.com/segments/segments_list/new',
@@ -148,21 +150,24 @@ class ApiClient:
         location = 'api/v2/remarketing/segments/' + str(id) + '.json'
 
         response = self.make_request('DELETE', location, headers=headers, json_convert=False, status_code=204)
-
-        if segments is not None:
-            i = 0
-            for segment in segments.data:
-                if segment.id == id:
-                    segments.data.pop(i)
-                    break
-                i += 1
+        try:
+            return response
+        except Exception:
+            return None
 
     def get_segments_list(self):
         location = 'api/v2/remarketing/segments.json'
         response = self.make_request('GET', location)
         return response['items']
 
-    def rename_segment(self, new_name, id, segments: Segments):
+    def get_segment(self, id):
+        all_segments = self.get_segments_list()
+        for segment in all_segments:
+            if segment['id'] == id:
+                return Segment(name=segment['name'], id=segment['id'])
+        return None
+
+    def rename_segment(self, new_name, id):
         headers = {
             'X-CSRFToken': self.csrf_token,
             'Referer': 'https://target.my.com/segments/segments_list/new',
@@ -201,13 +206,9 @@ class ApiClient:
         location = 'api/v2/remarketing/segments/' + str(id) + '.json'
 
         response = self.make_request('POST', location, headers=headers, json=json_data, status_code=204, json_convert=False)
+        if response == 200:
+            return Segment(id=id, name=new_name)
 
-        for segment in segments.data:
-            if segment.id == id:
-                segment.name = new_name
-                break
-
-    def delete_all_segments(self, segments: Segments):
-        for segment in segments.data:
-            self.delete_segment(segment.id)
-        segments.data.clear()
+    def delete_segments(self, segment_ids: List[int]):
+        for segment_id in segment_ids:
+            self.delete_segment(segment_id)
