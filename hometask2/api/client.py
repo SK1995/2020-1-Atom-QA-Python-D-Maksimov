@@ -2,7 +2,7 @@ import requests
 import json
 
 
-from utils.additional_structures import Segment
+from utils.additional_structures import Segment, Segments
 from utils.exceptions import ResponseStatusCodeException
 from urllib.parse import urljoin
 
@@ -15,7 +15,6 @@ class ApiClient:
         self.user_password = config_api.user_password
         self.session = requests.Session()
         self.csrf_token = self.login()
-        self.segments = list()
 
     def make_request(self, method, location, status_code=200, headers=None, params=None, data=None, json_convert=True, custom_location=False, allow_redirects=True, json=None):
         if not custom_location:
@@ -44,31 +43,39 @@ class ApiClient:
             'continue': 'https://account.my.com/login_continue/?continue=https%3A%2F%2Faccount.my.com',
             'failure': 'https://account.my.com/login/?continue=https%3A%2F%2Faccount.my.com',
         }
-
+        # Т.к. при переходи на ниже указанный url происходит большое кол-во редиректор, нам необходимо их повторить, чтобы забрать "печеньки" по каждой ссылке и CSRF токен на сессию
         url = 'https://auth-ac.my.com/auth?lang=ru&nosavelogin=0'
         response = self.make_request('POST', url, custom_location=True, json_convert=False, data=data, headers=headers, allow_redirects=False, status_code=302)
 
+        # "Ручной" редирект на https://account.my.com/login_continue/?continue=https%3A%2F%2Faccount.my.com
         url = response.headers['location']
         response = self.make_request('GET', url, custom_location=True, json_convert=False, data=data, headers=headers, allow_redirects=False, status_code=302)
 
+        # "Ручной" редирект на https://account.my.com/sdc?token=4c7e4a95d4dae1a63bba33bd752231aa
         url = response.headers['location']
         response = self.make_request('GET', url, custom_location=True, json_convert=False, data=data, headers=headers, allow_redirects=False, status_code=302)
 
+        # "Ручной" редирект на https://auth-ac.my.com/sdc?from=https%3A%2F%2Ftarget.my.com%2Fcsrf%2F
         url = response.headers['location']
         response = self.make_request('GET', url, custom_location=True, json_convert=False, data=data, headers=headers, allow_redirects=False, status_code=302)
 
+        # "Ручной" редирект на https://target.my.com/sdc?token=61d9bfc3417323c708e877f11b898f0a
         url = response.headers['location']
         response = self.make_request('GET', url, custom_location=True, json_convert=False, data=data, headers=headers, allow_redirects=False, status_code=302)
 
+        # Получение сессионного CSRF
         url = 'https://target.my.com/csrf/'
         response = self.make_request('GET', url, custom_location=True, json_convert=False, allow_redirects=False, status_code=302)
 
+        # "Ручной" редирект на https://account.my.com/login_continue/?continue=https%3A%2F%2Faccount.my.com
         url = response.headers['location']
         response = self.make_request('GET', url, custom_location=True, json_convert=False, allow_redirects=False, status_code=302)
 
+        # "Ручной" редирект на https://account.my.com/login_continue/?continue=https%3A%2F%2Faccount.my.com
         url = response.headers['location']
         response = self.make_request('GET', url, custom_location=True, json_convert=False, allow_redirects=False, status_code=302)
 
+        # "Ручной" редирект на https://auth-ac.my.com/sdc?from=https%3A%2F%2Faccount.my.com%2Flogin_continue%2F%3Fcontinue%3Dhttps%253A%252F%252Faccount.my.com
         url = response.headers['location']
         response = self.make_request('GET', url, custom_location=True, json_convert=False, allow_redirects=False)
 
@@ -87,7 +94,7 @@ class ApiClient:
 
         responce = self.make_request('GET', location, headers=headers, json_convert=False)
 
-    def create_new_segment(self, name):
+    def create_new_segment(self, name, segments: Segments):
         headers = {
             'X-CSRFToken': self.csrf_token,
             'Referer': 'https://target.my.com/segments/segments_list/new',
@@ -127,9 +134,9 @@ class ApiClient:
 
         response = self.make_request('POST', location, headers=headers, json=json_data)
 
-        self.segments.append(Segment(id=response['id'], name=response['name']))
+        segments.data.append(Segment(id=response['id'], name=response['name']))
 
-    def delete_segment(self, id):
+    def delete_segment(self, id, segments: Segments = None):
         headers = {
             'X-CSRFToken': self.csrf_token,
             'Referer': 'https://target.my.com/segments/segments_list/new',
@@ -142,14 +149,20 @@ class ApiClient:
 
         response = self.make_request('DELETE', location, headers=headers, json_convert=False, status_code=204)
 
-        i = 0
-        for segment in self.segments:
-            if segment.id == id:
-                self.segments.pop(i)
-                break
-            i += 1
+        if segments is not None:
+            i = 0
+            for segment in segments.data:
+                if segment.id == id:
+                    segments.data.pop(i)
+                    break
+                i += 1
 
-    def rename_segment(self, new_name, id):
+    def get_segments_list(self):
+        location = 'api/v2/remarketing/segments.json'
+        response = self.make_request('GET', location)
+        return response['items']
+
+    def rename_segment(self, new_name, id, segments: Segments):
         headers = {
             'X-CSRFToken': self.csrf_token,
             'Referer': 'https://target.my.com/segments/segments_list/new',
@@ -189,11 +202,12 @@ class ApiClient:
 
         response = self.make_request('POST', location, headers=headers, json=json_data, status_code=204, json_convert=False)
 
-        for segment in self.segments:
+        for segment in segments.data:
             if segment.id == id:
                 segment.name = new_name
                 break
 
-    def delete_all_segments(self):
-        for segment in self.segments:
+    def delete_all_segments(self, segments: Segments):
+        for segment in segments.data:
             self.delete_segment(segment.id)
+        segments.data.clear()

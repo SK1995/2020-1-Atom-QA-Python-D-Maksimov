@@ -20,14 +20,14 @@ class TestUi(BaseCase):
         camp_list_page = create_temp_campaign
         assert camp_list_page.find(camp_list_page.locators.CAMPAIGN_NAME_ELEM).text == 'Test1'
 
-    def test_create_new_campaign(self, create_temp_campaign, get_img_path_to_upload):
+    def test_create_new_campaign(self, create_temp_campaign, upload_image_path):
         camp_list_page = create_temp_campaign
-        camp_list_page.create_new_campaign('Test2', get_img_path_to_upload)
+        camp_list_page.create_new_campaign('Test2', upload_image_path)
         assert camp_list_page.find(camp_list_page.locators.CAMPAIGN_NAME_ELEM).text == 'Test2'
 
-    def test_remove_all_campaigns(self, get_campaigns_list_page, get_img_path_to_upload):
+    def test_remove_all_campaigns(self, get_campaigns_list_page, upload_image_path):
         camp_list_page = get_campaigns_list_page
-        camp_list_page.create_first_campaign('Test1', get_img_path_to_upload)
+        camp_list_page.create_first_campaign('Test1', upload_image_path)
         camp_list_page.remove_all_campaigns()
         with pytest.raises(NoSuchElementException):
             camp_list_page.find(camp_list_page.locators.CAMPAIGN_NAME_ELEM)

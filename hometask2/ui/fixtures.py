@@ -32,16 +32,19 @@ def get_campaigns_list_page(login_page, campaigns_list_page, config):
 
 
 @pytest.fixture(scope='function')
-def create_temp_campaign(get_campaigns_list_page, get_img_path_to_upload):
+def create_temp_campaign(get_campaigns_list_page, upload_image_path):
     camp_list_page = get_campaigns_list_page
-    camp_list_page.create_first_campaign('Test1', get_img_path_to_upload)
+    camp_list_page.create_first_campaign('Test1', upload_image_path)
     yield camp_list_page
     camp_list_page.remove_all_campaigns()
 
 
 @pytest.fixture(scope='function')
-def get_img_path_to_upload():
-    return os.path.abspath('hometask2/stuff/cat.jpg')
+def upload_image_path():
+    curr_file_path = os.path.dirname(__file__)
+    parent_dir = os.path.join(curr_file_path, os.pardir)
+    cat_jpg_path = os.path.join(parent_dir, 'stuff', 'cat.jpg')
+    return os.path.abspath(cat_jpg_path)
 
 
 @pytest.fixture(scope='function')
